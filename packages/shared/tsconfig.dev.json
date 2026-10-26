@@ -1,0 +1,13 @@
+{
+  /* The parts of shared that are not the rulebook: the tuning harness and the
+     tests. Both are run by bun and neither ships, so they get bun's types --
+     which `src`'s own config deliberately does not have.
+
+     ⚠️ Giving these files bun types does NOT weaken invariant 2. Purity is
+     enforced by the *client* program, which also typechecks `src` and has no
+     node or bun globals at all, so `process.env` in the rulebook still fails
+     the build. See architecture.md. */
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["bun"] },
+  "include": ["scripts", "src/**/*.test.ts"]
+}

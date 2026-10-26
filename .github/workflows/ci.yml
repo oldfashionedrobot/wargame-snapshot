@@ -1,0 +1,154 @@
+# The gate on every push to main or production. A push to production, or a
+# manual run from it, then releases: the server to Fly, and after it the same
+# client to itch. Each of those jobs holds one secret and runs no npm code.
+name: ci
+
+on:
+  push:
+    branches: [main, production]
+  # The rollback: run from production, naming a commit this workflow released.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: The full SHA of the commit to deploy; blank for the branch's head
+        required: false
+
+permissions:
+  contents: read
+
+# Runs on one branch queue: a newer one waits for the one in progress and
+# replaces any already waiting, so releases go out in order and the newest wins.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # ⚠️ The API's address is written here and nowhere else: the client's
+  # constant and its CSP are both built from it.
+  API_ORIGIN: https://wargame.fly.dev
+  BUILD: ${{ github.run_number }}
+
+jobs:
+  # The build it checks is the one a release ships.
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # checkout reads anything shorter as a branch or tag name.
+      - name: Refuse a ref that is not a full commit SHA
+        if: inputs.ref
+        run: '[[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::ref must be a full 40-character commit SHA"; exit 1; }'
+        env:
+          REF: ${{ inputs.ref }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: bun run gate
+      - if: github.ref == 'refs/heads/production'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: packages/client/dist
+          if-no-files-found: error
+
+  deploy-server:
+    needs: gate
+    if: github.ref == 'refs/heads/production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      # production only ever fast-forwards from main.
+      - name: Refuse a commit main does not contain
+        run: git merge-base --is-ancestor HEAD origin/main || { echo "::error::this commit is not on main"; exit 1; }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: packages/client/dist
+      - name: Install flyctl
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/flyctl.tgz" "https://github.com/superfly/flyctl/releases/download/v$FLYCTL_VERSION/flyctl_${FLYCTL_VERSION}_Linux_x86_64.tar.gz"
+          echo "$FLYCTL_SHA256  $RUNNER_TEMP/flyctl.tgz" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/flyctl"
+          tar -xzf "$RUNNER_TEMP/flyctl.tgz" -C "$RUNNER_TEMP/flyctl"
+          echo "$RUNNER_TEMP/flyctl" >> "$GITHUB_PATH"
+        env:
+          FLYCTL_VERSION: 0.4.119
+          FLYCTL_SHA256: bb8f916814f12bccf794889b0375dd10b075b60f965607fc39d89ecdad79dbcc
+      # Fly runs migrate.ts on a temporary machine before replacing this one.
+      - name: Deploy the server
+        run: >-
+          flyctl deploy --remote-only
+          --build-arg BUN_VERSION="$(jq -r '.packageManager | ltrimstr("bun@") | split("+")[0]' package.json)"
+          --build-arg BUILD="$BUILD"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      # The health check touches nothing, so this does: the page, a route that
+      # reads the maps, one that reads the database -- and the build it reports
+      # is this one. A broken release stops here, before itch.
+      - name: Check the release answers
+        run: |
+          curl -fsS -o /dev/null "$API_ORIGIN/"
+          curl -fsS -o /dev/null "$API_ORIGIN/api/maps"
+          token=$(curl -fsS -X POST -H 'content-type: application/json' -d '{}' "$API_ORIGIN/api/auth/guest" | jq -r .token)
+          curl -fsS -o /dev/null -H "authorization: Bearer $token" "$API_ORIGIN/api/matches"
+          live=$(curl -fsS -D - -o /dev/null "$API_ORIGIN/api/health" | tr -d '\r' | awk 'tolower($1) == "x-build:" { print $2 }')
+          echo "live build: $live"
+          [ "$live" = "$BUILD" ]
+
+  # After the server, so it is always the newer of the two: it accepts the
+  # client it replaced, and an itch build can trail it while itch processes.
+  push-itch:
+    needs: deploy-server
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      ITCH_TARGET: g00dgh0st/gunpowder-tactics:html5
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      # Only the server serves the compressed siblings, and itch counts every
+      # file against a limit of a thousand.
+      - name: Leave out the compressed siblings
+        run: |
+          find dist -type f \( -name '*.br' -o -name '*.gz' \) -delete
+          files=$(find dist -type f | wc -l)
+          echo "$files files"
+          [ "$files" -le 1000 ]
+      - name: Install butler
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/butler.zip" "https://broth.itch.zone/butler/linux-amd64/$BUTLER_VERSION/archive/default"
+          echo "$BUTLER_SHA256  $RUNNER_TEMP/butler.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/butler.zip" -d "$RUNNER_TEMP/butler"
+          echo "$RUNNER_TEMP/butler" >> "$GITHUB_PATH"
+        env:
+          BUTLER_VERSION: 15.32.0
+          BUTLER_SHA256: 2335971394ef6596f95ded0833e85ee28755e13761716ef4c91d6b11f69162f5
+      # ⚠️ itch refuses a push while its last build is still processing, so that
+      # refusal, and only that one, is retried for a while.
+      - name: Push the client to itch
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            code=0
+            butler push dist "$ITCH_TARGET" --userversion "$BUILD" > "$RUNNER_TEMP/push.log" 2>&1 || code=$?
+            cat "$RUNNER_TEMP/push.log"
+            if [ "$code" -eq 0 ]; then exit 0; fi
+            grep -q 'still processing' "$RUNNER_TEMP/push.log" || exit "$code"
+            if [ "$attempt" -lt 10 ]; then
+              echo "itch is still processing the last build; retrying in a minute"
+              sleep 60
+            fi
+          done
+          exit 1
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}

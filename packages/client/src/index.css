@@ -1,0 +1,167 @@
+:root {
+  --text: #6b6375;
+  --text-h: #08060d;
+  --bg: #fff;
+  --border: #e5e4e7;
+
+  /* ⚠️ Page chrome, not board chrome -- see the board block at the bottom.
+     Both were written out wherever they were needed: the error red three
+     times across two routes and the canvas, which is how "make errors a
+     bit softer" becomes a grep. ⚠️ No dark variant, which keeps what was
+     there rather than inventing one; the `prefers-color-scheme` block
+     below is where it would go. */
+  --danger: #c0392b;
+  --warn: #b9770e;
+
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  font: 18px/145% var(--sans);
+  letter-spacing: 0.18px;
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #9ca3af;
+    --text-h: #f3f4f6;
+    --bg: #16171d;
+    --border: #2e303a;
+  }
+}
+
+#root {
+  max-width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  border-inline: 1px solid var(--border);
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+h1 {
+  font-family: var(--heading);
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+h1 {
+  font-size: 56px;
+  letter-spacing: -1.68px;
+  margin: 32px 0;
+  @media (max-width: 1024px) {
+    font-size: 36px;
+    margin: 20px 0;
+  }
+}
+p {
+  margin: 0;
+}
+
+/* --- Chrome that floats over the board ---------------------------------
+
+   ⚠️ **Dark whatever the page theme is, and deliberately not wired to
+   `--bg`.** These sit on a lit 3D scene rather than on the page, so their
+   contrast is against grass and stone; a light-mode variant would be
+   unreadable over the board. The tokens above belong to the page, these
+   belong to the board, and the split is the point rather than an oversight.
+
+   ⚠️ **One surface, where there were three.** The menu, the forecast and the
+   confirm pane each carried their own near-identical `rgba` -- 0.94, 0.92 and
+   0.88, over two different greys -- which is drift rather than intent: nothing
+   ever said why an informational pane should be more transparent than an
+   interactive one. If that distinction is wanted later it is a second token
+   with a reason attached, not three literals that disagree by accident.        */
+
+:root {
+  --board-surface: rgba(18, 22, 28, 0.92);
+  --board-edge: rgba(255, 255, 255, 0.16);
+  --board-lift: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --board-ink: #f2f4f7;
+  --board-hover: rgba(255, 255, 255, 0.14);
+  --board-damage: #ff9a8a;
+  --board-track: rgba(0, 0, 0, 0.45);
+  /* What shows where the board does not reach. ⚠️ Matched **by eye** to
+     Babylon's default clear colour, because the renderer never sets one --
+     so a library default is holding one end of this and nothing checks it.
+     The real fix is for the scene to declare its own and this to follow. */
+  --board-void: #2f3042;
+  --board-radius: 5px;
+  --board-text: 13px;
+}
+
+/* A pane anchored over a tile. ⚠️ `position` and the offsets are load-bearing:
+   the renderer writes `transform` on these every frame and nothing else, so
+   everything but the translation belongs here. */
+.board-pane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 6px 8px;
+  border-radius: var(--board-radius);
+  background: var(--board-surface);
+  color: var(--board-ink);
+  font-size: var(--board-text);
+  white-space: nowrap;
+}
+
+/* The one pane that takes clicks, so the only one that reads as raised. */
+.board-pane--menu {
+  padding: 4px;
+  border: 1px solid var(--board-edge);
+  box-shadow: var(--board-lift);
+  min-width: 104px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.board-pane--forecast {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.5;
+}
+
+/* ⚠️ The tile underneath is the button: a pane that swallowed the click would
+   block its own confirmation. */
+.board-pane--quiet {
+  pointer-events: none;
+}
+
+/* ⚠️ Hover in CSS rather than React state, which is what it was. There is no
+   disabled row -- an unavailable action is omitted -- so hover is the only
+   state a row has, and a state hook per row to express it was a component
+   re-rendering on mouse movement over a canvas. */
+.board-menu-item {
+  appearance: none;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: var(--board-text);
+  text-align: left;
+  cursor: pointer;
+  color: var(--board-ink);
+  background: transparent;
+}
+
+.board-menu-item:hover {
+  background: var(--board-hover);
+}

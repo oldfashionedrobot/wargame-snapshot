@@ -1,0 +1,19 @@
+{
+  "name": "@wargame/server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --env-file=../../.env --watch src/http.ts",
+    "start": "bun --env-file=../../.env src/http.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.4",
+    "@wargame/shared": "workspace:*",
+    "drizzle-orm": "0.45.2",
+    "unique-names-generator": "4.7.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

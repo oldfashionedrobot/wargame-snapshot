@@ -1,0 +1,1 @@
+ALTER TABLE `matches` ADD `map_id` text DEFAULT 'classic' NOT NULL;

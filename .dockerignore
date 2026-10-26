@@ -1,0 +1,18 @@
+# An allowlist: everything stays out of the image unless it is named here.
+*
+!Dockerfile
+!package.json
+!bun.lock
+!bunfig.toml
+!packages/*/package.json
+!packages/server/src
+!packages/server/drizzle
+!packages/shared/src
+!packages/client/dist
+# ⚠️ Last, because the last matching line decides: a folder let in above admits
+# everything inside it, so nothing that belongs only on one machine gets in.
+**/.env*
+**/*.db
+**/*.db-*
+**/node_modules
+**/*.test.ts

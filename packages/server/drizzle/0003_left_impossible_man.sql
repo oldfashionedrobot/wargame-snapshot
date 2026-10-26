@@ -1,0 +1,1 @@
+ALTER TABLE `resolutions` ADD `rolls` text;

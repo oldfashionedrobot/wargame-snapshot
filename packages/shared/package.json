@@ -1,0 +1,13 @@
+{
+  "name": "@wargame/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

@@ -1,0 +1,6 @@
+# Pinned rather than left to bun's default for workspaces: each package resolves
+# only what it declares, so a stray cross-package import fails to resolve
+# instead of being hoisted into reach. CLAUDE.md and the architecture doc rely
+# on it.
+[install]
+linker = "isolated"

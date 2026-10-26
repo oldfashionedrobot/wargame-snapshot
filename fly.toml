@@ -1,0 +1,29 @@
+# The server on Fly: one machine in iad, stopped when idle and started by the
+# next request. The image is the root Dockerfile, built by Fly's remote
+# builder; BUN_VERSION and BUILD come in as build arguments.
+app = 'wargame'
+primary_region = 'iad'
+
+[deploy]
+  # Once per deploy, on a temporary machine with the app's secrets, before the
+  # running machine is replaced -- and a failure stops the deploy.
+  release_command = 'bun packages/server/src/migrate.ts'
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # Touches no database, so it spends nothing from the quota.
+  [[http_service.checks]]
+    grace_period = '10s'
+    interval = '30s'
+    method = 'GET'
+    path = '/api/health'
+    timeout = '5s'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
