@@ -51,7 +51,7 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 
 await page.goto('http://localhost:5173/');
 await page.click('text=New Game');             // opens the menu; hot-seat is chosen
-await page.click('text=Start');                // navigates to /:matchId
+await page.click('text=Start');                // opens the game -- the URL stays /
 await page.waitForSelector("text=Blue Army's turn");
 await page.waitForTimeout(1500);               // let Babylon draw
 await page.screenshot({ path: 'board.png' });
@@ -106,6 +106,11 @@ What to assert:
   `pointer-events: auto`, to be gone. Then a unit the battle killed falls where
   it stands and blinks out — about a second and a half — before the board syncs
   it away.
+- ⚠️ **The address bar never changes**: the app routes in memory, so a match
+  or the map viewer cannot be loaded by URL — `goto` anything but `/` lands on
+  the start screen. Reopen a match from the start screen's list, by clicking
+  its id. To start on a given map, pick it before Start:
+  `page.selectOption('form[aria-label="New game"] select', 'little-lion-12')`.
 - Map viewer: `page.click('text=Browse maps')` from the start screen → `/maps`,
   a `select` of every map. Switching the `select` rebuilds the scene;
   `page.selectOption('select', 'lakeland')` then screenshot. It draws the map
